@@ -5,7 +5,8 @@ aggregatable. Data-sources are text-notes, emails, photos, voice,
 Whatsapp, Signal, ... Every source stays with its own creator but can
 be linked with other sources through tags.
 
-Tags are added automatically (for date, place, source),
+Tags are added automatically (for date, place, source), semi-automatically
+(for detected keywords) or manually.
 
 Roadmap 2017:
 - January: write down ideas
