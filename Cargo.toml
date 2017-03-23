@@ -1,0 +1,6 @@
+[package]
+name = "cybermind"
+version = "0.1.0"
+authors = ["Linus Gasser <ineiti@gasser.blue>"]
+
+[dependencies]
