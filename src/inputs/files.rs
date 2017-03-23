@@ -1,4 +1,5 @@
 use inputs;
+use inputs::{Sources, Value, Tag};
 use std::thread;
 use std::time;
 use std::sync::mpsc::Sender;
@@ -19,8 +20,10 @@ pub fn new(path: String, inform: Sender<inputs::Element>){
         for p in paths {
             let pa = p.unwrap().path();
             let name = String::from(pa.to_str().unwrap());
-            let e = inputs::Element{source: String::from("file:") + &path,
-                date: String::from("Constant"), name: name};
+            let e = inputs::new_element(Sources::Files, path.clone(),
+                                        vec![0; 0],
+                                        vec![Tag{key: String::from("name"),
+                                           value: Value::Str(name)}]);
             inform.send(e).unwrap();
         }
     }

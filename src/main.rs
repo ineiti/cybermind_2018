@@ -12,6 +12,6 @@ fn main() {
 
     loop{
         let e = rx.recv().unwrap();
-        println!("Received from {}: {}", e.source, e.name);
+        println!("Received from {}: {} - {}", e.source, e.url, e.tags[0]);
     }
 }
