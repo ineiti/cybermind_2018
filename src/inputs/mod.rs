@@ -55,21 +55,23 @@ impl fmt::Display for Value{
     }
 }
 
-pub fn start(source: Sources, url: String, tx: Sender<Element>){
+pub fn start(source: Sources, url: &str, tx: &Sender<Element>){
+    let tx_copy = tx.clone();
+    let str = String::from(url);
     thread::spawn(move||{
         match source{
             Sources::Email => {
-                println!("Spawning email: {}", url);
-                email::new(url, tx);
+                println!("Spawning email: {}", str);
+                email::new(&str, tx_copy);
             },
             Sources::Files => {
-                println!("Spawning file-watcher: {}", url);
-                files::new(url, tx);
+                println!("Spawning file-watcher: {}", str);
+                files::new(&str, tx_copy);
             }
         }
     });
 }
 
-pub fn new_element(src: Sources, url: String, data: Vec<u8>, tags: Vec<Tag>) -> Element{
-    Element{ source: src, url: url, data: data, tags: tags}
+pub fn new_element(src: Sources, url: &str, data: Vec<u8>, tags: Vec<Tag>) -> Element{
+    Element{ source: src, url: String::from(url), data: data, tags: tags}
 }

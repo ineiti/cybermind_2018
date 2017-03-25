@@ -5,7 +5,7 @@ use std::time;
 use std::sync::mpsc::Sender;
 use std::fs;
 
-pub fn new(path: String, inform: Sender<inputs::Element>){
+pub fn new(path: &str, inform: Sender<inputs::Element>){
     loop {
         thread::sleep(time::Duration::new(1,0));
 
