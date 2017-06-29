@@ -1,99 +1,29 @@
 # CyberMind
 
-CyberMind's goal is to make any data coming into your computer easily
-aggregatable. Data-sources are text-notes, emails, photos, voice,
-Whatsapp, Signal, ... Every source stays with its own creator but can
-be linked with other sources through tags.
+* Do you hesitate before putting an email in _one_ box, because it might fit 
+into two, three or more boxes?
+* Would you like to remember which file was important for that email you're 
+reading?
+* Are you confused with having a tree in the filesystem, as most files belong 
+to two, three or more projects?
+* Do you like thinking not linearly, not in trees, but in a matrix where emails, 
+chat, files, sms and more are interconnected?
 
-Tags are added automatically (for date, place, source), semi-automatically
-(for detected keywords) or manually.
+If you answer most of these questions with 'yes', then CyberMind might help
+you. The idea is very simple: 
+* Input-modules collect your data and adds automatically available tags 
+(date, sender, receiver, keywords). 
+* You can add any tag you want to one, two or more elements to connect them 
+together.
+* Using the UI you can arrange your tags into projects and browse your data.
 
-Roadmap 2017:
-- January: write down ideas, start backend
-- February: implement simple web-client
-- March: make usable Android / iOs client
-- April: make desktop-app for Windows/Mac/Linux
-- Mai: add email plugin
-- June: add bookmark/www plugin
+CyberMind is distributed: a node runs on your laptop, another on the server,
+and one on your phone to read/write SMS and WhatsApp. Of course you can also
+give access-rights to nodes from your friends and share, link and browse
+whatever they opened for you.
 
-# Architecture
+It is free as in GPLv3 or later, but we can offer you some additional services:
+* server-node for connecting your computer with your phone
+* space for your data: backup and share data with others
 
-## Sources
-
-Different sources can be added as plug-ins to cybermind:
-
-- text - most simple source where the user types in text
-- email - probably on server - fetches email from POP or IMAP and
- adds new emails to the database.
-- bookmarks - choosing a page and/or select text
-
-They must have some of the following:
-
-- Input - user-input or mail-server or browser-plugin
-
-## Backend
-
-Database storage for all sources. Some ideas:
-
-- make it directories/files for easy synchronisation across clouds
-- every device syncs its files between locally and the cloud
-- after synching, the device checks for conflicts
-- file-name is either $( date )_${version}_${device} or a hash of
-  the file
-- there could be two files: one .json and one .data in case the
-  corresponding data is bigger than 1k
-
-## Controller
-
-The controller plugs the different sources together and handles the
-tags.
-
-## Frontend
-
-The frontend only displays the
-
-## Tags
-
-
-### Automatic
-
-A couple of automatic tags which are added always - can they be deleted?
-
-- date/time
-- device-name where the document has been created
-- service-type and service-name
-
-### Semi-automatic
-
-Semi-automatic tags, presented to the user - perhaps for 'sure' tags they
-are added by default, for 'not sure' tags, the user is asked.
-
-- rare words present in the document
-- tags present in similar documents
-
-### Manual tags
-
-All other, can be added at wish.
-
-### Tag-hierarchy
-
-Tags can depend on other tags - when the child-tag is added, the parent-
-tag is also present.
-
-## Filters and actions
-
-The user can define filters that do actions on sources:
-
-### Actions
-
-- email
-    - move to folder
-    - delete
-    - mark as SPAM
-    - auto-reply
-- IFTTT
-    - send actions to IFTTT
-    
-### Filters
-
-Do standard-filters on content (regexp), date, ...
+Of course we're happy to have feedback and additional modules for our cybermind.

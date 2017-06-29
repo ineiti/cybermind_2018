@@ -1,6 +1,8 @@
 target
 tmp
 .idea/
-Cargo.lock
 CyberMind.iml
 
+/cybermind
+/ionic
+build/
