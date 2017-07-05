@@ -7,10 +7,19 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"crypto/sha256"
+	"os"
+
+	"sort"
+
+	"encoding/binary"
+
+	"fmt"
+
 	"github.com/dedis/crypto/random"
+	"github.com/jinzhu/gorm"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/dedis/onet.v1/log"
-	"os"
 )
 
 const BaseDomain = "cybermind.gasser.blue"
@@ -47,8 +56,8 @@ func TempConfigPath() (err error) {
 	return err
 }
 
-func GetTemp() string {
-	f, err := ioutil.TempFile("", "config.toml")
+func GetTemp(name string) string {
+	f, err := ioutil.TempFile("", name)
 	log.ErrFatal(err)
 	f.Close()
 	os.Remove(f.Name())
@@ -56,23 +65,88 @@ func GetTemp() string {
 }
 
 // ObjectID represents any object
+const IDLen = 32
+
 type ObjectID []byte
 type ModuleID []byte
 type TagID []byte
 type ActionID []byte
 type MessageID []byte
 
+func NewObjectID() ObjectID {
+	return random.Bytes(IDLen, random.Stream)
+}
+func NewModuleID() ModuleID {
+	return random.Bytes(IDLen, random.Stream)
+}
+func NewTagID() TagID {
+	return random.Bytes(IDLen, random.Stream)
+}
+func NewActionID() ActionID {
+	return random.Bytes(IDLen, random.Stream)
+}
+func NewMessageID() MessageID {
+	return random.Bytes(IDLen, random.Stream)
+}
+
 type Tag struct {
-	Object    ObjectID
-	Key       string
-	Value     string
-	Ephemeral bool
-	ID        TagID
+	gorm.Model
+	Key     string
+	Value   string
+	StoreIt bool
+	GID     TagID
+}
+
+func NewTag(key, value string) Tag {
+	return Tag{
+		Key:     key,
+		Value:   value,
+		GID:     NewTagID(),
+		StoreIt: true,
+	}
+}
+
+func (t *Tag) Hash() []byte {
+	hash := sha256.New()
+	hash.Write([]byte(t.Key))
+	hash.Write([]byte(t.Value))
+	if t.StoreIt {
+		hash.Write([]byte{1})
+	} else {
+		hash.Write([]byte{0})
+	}
+	hash.Write(t.GID)
+	return hash.Sum(nil)
+}
+
+func (t Tag) String() string {
+	return fmt.Sprintf("%s:%s - %t/%x", t.Key, t.Value, t.StoreIt,
+		t.GID[0:4])
 }
 
 type Object struct {
-	Module ModuleID
-	ID     ObjectID
+	gorm.Model
+	GID      ObjectID
+	ModuleID ModuleID
+	Data     []byte
+	StoreIt  bool
+}
+
+func (o *Object) Hash() []byte {
+	hash := sha256.New()
+	hash.Write(o.GID)
+	hash.Write(o.ModuleID)
+	hash.Write(o.Data)
+	return hash.Sum(nil)
+}
+
+func (o Object) String() string {
+	dataLen := len(o.Data)
+	if dataLen > 4 {
+		dataLen = 4
+	}
+	return fmt.Sprintf("%x/%x - %t/%x", o.ModuleID[0:4], o.Data[0:dataLen],
+		o.StoreIt, o.GID[0:4])
 }
 
 type KeyValue struct {
@@ -86,7 +160,7 @@ type Action struct {
 	// TTL indicates how many hops this action should take. TTL == 0
 	// means only local propagation.
 	TTL int
-	ID  ActionID
+	GID ActionID
 }
 
 func NewAction(cmd string, kvs ...KeyValue) Action {
@@ -97,15 +171,85 @@ func NewAction(cmd string, kvs ...KeyValue) Action {
 	return Action{
 		Command:   cmd,
 		Arguments: args,
-		ID:        ActionID(random.Bytes(32, random.Stream)),
+		GID:       NewActionID(),
 	}
 }
 
+func (a *Action) Hash() []byte {
+	hash := sha256.New()
+	hash.Write([]byte(a.Command))
+	binary.Write(hash, binary.BigEndian, a.TTL)
+	hash.Write(a.GID)
+	var args []string
+	for arg := range a.Arguments {
+		args = append(args, arg)
+	}
+	sort.Strings(args)
+	for arg, value := range args {
+		binary.Write(hash, binary.BigEndian, arg)
+		hash.Write([]byte(value))
+	}
+	return hash.Sum(nil)
+}
+
+type Tags []Tag
+
+func (t Tags) GetLastValue(key string) *Tag {
+	var last *Tag
+	for _, tag := range t {
+		if tag.Key == key {
+			last = &tag
+		}
+	}
+	return last
+}
+
+func (t Tags) Add(tag Tag) Tags {
+	return append(t, tag)
+}
+
 type Message struct {
-	Objects []Object
-	Tags    []Tag
-	Actions []Action
-	ID      MessageID
+	Objects   []Object
+	Tags      Tags
+	Action    Action
+	ID        MessageID
+	Signature []byte
+}
+
+func (m *Message) Hash() []byte {
+	hash := sha256.New()
+	for _, o := range m.Objects {
+		hash.Write(o.Hash())
+	}
+	for _, t := range m.Tags {
+		hash.Write(t.Hash())
+	}
+	hash.Write(m.Action.Hash())
+	hash.Write(m.ID)
+	return hash.Sum(nil)
+}
+
+func (m *Message) String() string {
+	var str []string
+	var objs []string
+	for _, o := range m.Objects {
+		objs = append(objs, fmt.Sprintf("ID: %x - ModuleID: %x",
+			o.GID[0:4], o.ModuleID[0:4]))
+	}
+	if len(objs) > 0 {
+		str = append(str, fmt.Sprintf("objects: [%s]", strings.Join(objs, ",")))
+	}
+	var tags []string
+	for _, t := range m.Tags {
+		tags = append(tags, fmt.Sprintf("{'%s':%s}", t.Key, t.Value))
+	}
+	if len(tags) > 0 {
+		str = append(str, fmt.Sprintf("tags: [%s]", strings.Join(tags, ",")))
+	}
+	if m.Action.Command != "" {
+		str = append(str, fmt.Sprintf("action: %+v", m.Action))
+	}
+	return strings.Join(str, " - ")
 }
 
 type Module interface {

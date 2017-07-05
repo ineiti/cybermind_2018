@@ -43,14 +43,11 @@ func main() {
 				{
 					Name:    "list",
 					Aliases: []string{"ls"},
-					Usage:   "lists available and spawned modules",
+					Usage:   "lists available or spawned modules",
 					Action:  moduleList,
 					Flags: []cli.Flag{
 						cli.BoolFlag{
 							Name: "spawned, s",
-						},
-						cli.BoolFlag{
-							Name: "available, a",
 						},
 					},
 				},

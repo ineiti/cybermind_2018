@@ -135,7 +135,7 @@ func (c *CLI) Stop() {
 }
 
 func CLICmd(path, cmd string) (reply string, err error) {
-	repName := broker.GetTemp()
+	repName := broker.GetTemp("fifo")
 	if err = syscall.Mkfifo(repName, 0600); err != nil {
 		return
 	}

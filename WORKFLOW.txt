@@ -1,0 +1,25 @@
+        are messages stored? -> probably just tags
+        need to write wrapper around sqlite to access data
+        modules have access to their tags
+        Broker stores all new tags
+    ? Think about how to integrate with local database / sqlite?
+        params: [module,tags,object]
+    .processMsg(msg(action: search(params))) -> broker.broadcastMsg(msg(object: found))
+    .processMsg(msg(tag: saveit)) -> save(msg.object, msg.tag)
+storage.go
+x   message.Actions -> message.Action
+probably
+x    cybermind.new -> .processMsg(nil) -> msg(action: search(module=config))
+x    cli.spawn -> .processMsg -> msg(object: config, tag: saveit)
+x    .processMsg(msg{object: config}) -> broker.spawnModule
+config.go
+x    also needs storage module
+x    make moduleInstance module in broker that takes care of spawning and
+x    creating savable objects
+170702
+Spawning
+    perhaps only needed when sending to other node
+? How to sign messages?
+Check configuration-calls
+check all modules are in all.go
+170630

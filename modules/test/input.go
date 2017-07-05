@@ -1,7 +1,7 @@
 package test
 
 import (
-	"github.com/ineiti/cybermind/clib"
+	"github.com/ineiti/cybermind/broker"
 	"gopkg.in/dedis/onet.v1/log"
 )
 
@@ -15,7 +15,7 @@ func RegisterTestInput(b *broker.Broker) error {
 	return b.RegisterModule(ModuleTestInput, NewTestInput)
 }
 
-func NewTestInput(b *broker.Broker, config []byte) broker.Module {
+func NewTestInput(b *broker.Broker, msg *broker.Message) broker.Module {
 	return &TestInput{
 		Broker: b,
 	}

@@ -1,7 +1,6 @@
 package transfer
 
 import (
-	"github.com/ineiti/cybermind/clib"
 	"github.com/ineiti/cybermind/broker"
 )
 
@@ -11,7 +10,11 @@ selective sending and receiving of messages.
 */
 
 type Server struct {
-	Path string
+	Path          string
+	AccessControl []AccessControl
+}
+
+type AccessControl struct {
 }
 
 func RegisterServer(b *broker.Broker) error {

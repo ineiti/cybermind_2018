@@ -49,20 +49,20 @@ func TestBroker_Stop(t *testing.T) {
 func TestBroker_NewMessage(t *testing.T) {
 	tb := initBroker(StartBroker)
 	assert.Equal(t, 1, tb.Test.Mesages)
-	tb.Broker.NewMessage(&Message{})
+	tb.Broker.BroadcastMessage(&Message{})
 	assert.Equal(t, 2, tb.Test.Mesages)
-	log.ErrFatal(tb.Broker.NewMessage(&Message{
+	log.ErrFatal(tb.Broker.BroadcastMessage(&Message{
 		Objects: []Object{{}},
 	}))
 	assert.Equal(t, 4, tb.Test.Mesages)
-	log.ErrFatal(tb.Broker.NewMessage(&Message{
+	log.ErrFatal(tb.Broker.BroadcastMessage(&Message{
 		Objects: []Object{{}, {}},
 	}))
 	assert.Equal(t, 7, tb.Test.Mesages)
 	tb.Test.ReturnError = 1
-	assert.NotNil(t, tb.Broker.NewMessage(nil))
+	assert.NotNil(t, tb.Broker.BroadcastMessage(nil))
 	tb.Test.ReturnError = 2
-	assert.NotNil(t, tb.Broker.NewMessage(&Message{
+	assert.NotNil(t, tb.Broker.BroadcastMessage(&Message{
 		Objects: []Object{{}},
 	}))
 }
@@ -106,9 +106,11 @@ type testModule struct {
 	ReturnError int
 }
 
-func newTest(b *Broker, config []byte) Module {
+func newTest(b *Broker, msg *Message) Module {
 	id := 0
-	if config != nil {
+	if msg != nil &&
+		msg.Tags != nil &&
+		msg.Tags.GetLastValue("config") != nil {
 		id = 1
 	}
 	return &testModule{

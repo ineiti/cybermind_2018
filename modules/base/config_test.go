@@ -1,4 +1,4 @@
-package data
+package base
 
 import (
 	"testing"
@@ -15,14 +15,21 @@ func TestRegisterToml(t *testing.T) {
 }
 
 func TestToml_ProcessMessage(t *testing.T) {
+	log.Lvl1("Creating first testInput-module")
 	tt := initTest(0)
 	log.ErrFatal(tt.Broker.Start())
-	log.ErrFatal(tt.Broker.SpawnModule(test.ModuleTestInput, nil))
+	log.ErrFatal(tt.Broker.BroadcastMessage(&broker.Message{
+		Action: broker.Action{
+			Command: broker.SubDomain("spawn", "config"),
+			Arguments: map[string]string{
+				"module": test.ModuleTestInput,
+			},
+		},
+	}))
 	log.ErrFatal(tt.Broker.Stop())
-	cf := configFile
 
+	log.Lvl1("Re-starting broker and checking for testInput-Module")
 	tt = initTest(0)
-	configFile = cf
 	log.ErrFatal(tt.Broker.Start())
 	require.Equal(t, 2, len(tt.Broker.Modules))
 }
