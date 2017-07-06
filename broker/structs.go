@@ -91,18 +91,18 @@ func NewMessageID() MessageID {
 
 type Tag struct {
 	gorm.Model
-	Key     string
-	Value   string
-	StoreIt bool
-	GID     TagID
+	Key       string
+	Value     string
+	Ephemeral bool
+	Objects   []Object `gorm:"many2many:ObjectTag;"`
+	GID       TagID
 }
 
 func NewTag(key, value string) Tag {
 	return Tag{
-		Key:     key,
-		Value:   value,
-		GID:     NewTagID(),
-		StoreIt: true,
+		Key:   key,
+		Value: value,
+		GID:   NewTagID(),
 	}
 }
 
@@ -110,7 +110,7 @@ func (t *Tag) Hash() []byte {
 	hash := sha256.New()
 	hash.Write([]byte(t.Key))
 	hash.Write([]byte(t.Value))
-	if t.StoreIt {
+	if t.Ephemeral {
 		hash.Write([]byte{1})
 	} else {
 		hash.Write([]byte{0})
@@ -120,33 +120,8 @@ func (t *Tag) Hash() []byte {
 }
 
 func (t Tag) String() string {
-	return fmt.Sprintf("%s:%s - %t/%x", t.Key, t.Value, t.StoreIt,
-		t.GID[0:4])
-}
-
-type Object struct {
-	gorm.Model
-	GID      ObjectID
-	ModuleID ModuleID
-	Data     []byte
-	StoreIt  bool
-}
-
-func (o *Object) Hash() []byte {
-	hash := sha256.New()
-	hash.Write(o.GID)
-	hash.Write(o.ModuleID)
-	hash.Write(o.Data)
-	return hash.Sum(nil)
-}
-
-func (o Object) String() string {
-	dataLen := len(o.Data)
-	if dataLen > 4 {
-		dataLen = 4
-	}
-	return fmt.Sprintf("%x/%x - %t/%x", o.ModuleID[0:4], o.Data[0:dataLen],
-		o.StoreIt, o.GID[0:4])
+	return fmt.Sprintf(">%x:%s:%s - %t/%x - %s<", t.ID, t.Key, t.Value, t.Ephemeral,
+		t.GID[0:4], t.Objects)
 }
 
 type KeyValue struct {

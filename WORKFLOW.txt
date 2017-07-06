@@ -1,12 +1,17 @@
-        are messages stored? -> probably just tags
-        need to write wrapper around sqlite to access data
-        modules have access to their tags
-        Broker stores all new tags
+fix tests
+    verify many-to-many relationship is OK
+x   better link tags and objects - perhaps using gorm's many-to-many relationship?
+- 170706
+struct.go
+    storage saves objects and tags
+        using gorm
     ? Think about how to integrate with local database / sqlite?
         params: [module,tags,object]
     .processMsg(msg(action: search(params))) -> broker.broadcastMsg(msg(object: found))
-    .processMsg(msg(tag: saveit)) -> save(msg.object, msg.tag)
+    .processMsg(msg.tag.storeit == true) -> save(msg.tag)
+    .processMsg(msg.obj.storeit == true) -> save(msg.object)
 storage.go
+- 170705
 x   message.Actions -> message.Action
 probably
 x    cybermind.new -> .processMsg(nil) -> msg(action: search(module=config))
@@ -16,10 +21,10 @@ config.go
 x    also needs storage module
 x    make moduleInstance module in broker that takes care of spawning and
 x    creating savable objects
-170702
+- 170702
 Spawning
     perhaps only needed when sending to other node
 ? How to sign messages?
 Check configuration-calls
 check all modules are in all.go
-170630
+- 170630

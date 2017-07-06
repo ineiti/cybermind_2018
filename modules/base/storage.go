@@ -49,6 +49,8 @@ func NewStorage(b *broker.Broker, msg *broker.Message) broker.Module {
 	log.ErrFatal(err)
 	log.ErrFatal(s.DataBase.AutoMigrate(&broker.Tags{}).Error)
 	log.ErrFatal(s.DataBase.AutoMigrate(&broker.Object{}).Error)
+	//log.ErrFatal(s.DataBase.Model(&broker.Tag{}).
+	//	Related(&broker.Object{}, "Objects").Error)
 	return s
 }
 
@@ -68,7 +70,13 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		if err != nil {
 			log.Error(err)
 		}
+		for i := range tags {
+			s.DataBase.Model(&tags[i]).Related(&tags[i].Objects, "Objects")
+		}
 		log.Print("Found Tags:", tags)
+		return []broker.Message{{
+			Tags: tags,
+		}}, nil
 	case StorageSearchObject:
 		find := createFind(m.Action.Arguments)
 		var objs []broker.Object
@@ -76,31 +84,38 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		if err != nil {
 			log.Error(err)
 		}
+		for i := range objs {
+			s.DataBase.Model(&objs[i]).Related(&objs[i].Tags, "Tags")
+		}
 		log.Print("Found Objs:", objs)
 		return []broker.Message{{
 			Objects: objs,
 		}}, nil
+	default:
 	}
-	for _, o := range m.Objects {
-		if o.StoreIt {
+	for i, o := range m.Objects {
+		if o.StoreData {
 			log.Print("Storing Object:", o)
-			o.StoreIt = false
-			err := s.DataBase.Create(&o).Error
+			o.StoreData = false
+			err := s.DataBase.Create(&m.Objects[i]).Error
 			if err != nil {
 				return nil, err
 			}
-			printObjects(s)
 		}
+		printObjects(s)
 	}
 	for _, t := range m.Tags {
-		if t.StoreIt {
-			log.Print("Storing Tag:", t)
+		if !t.Ephemeral {
+			for _, o := range m.Objects {
+				t.Objects = append(t.Objects, o)
+			}
+			log.Print("Storing Tag:", t, t.Objects)
 			err := s.DataBase.Create(&t).Error
 			if err != nil {
 				return nil, err
 			}
-			printTags(s)
 		}
+		printTags(s)
 	}
 	return nil, nil
 }
@@ -120,17 +135,24 @@ func printObjects(s *Storage) {
 func createFind(args map[string]string) map[string]interface{} {
 	find := make(map[string]interface{})
 	for k, v := range args {
-		log.Printf("Adding search-argument %s/%s", k, v)
-		find[k] = v
-		if b, _ := regexp.MatchString("X'[0-9a-f]*'", v); b {
-			bin, err := hex.DecodeString(v[2 : len(v)-1])
-			if err == nil {
-				log.Print("Searching for binary %x", bin)
-				find[k] = bin
-			} else {
-				log.Error(err)
-			}
+		switch k {
+		default:
+			log.Printf("Adding search-argument %s/%s", k, v)
+			find[k] = interpretString(v)
 		}
 	}
 	return find
+}
+
+func interpretString(str string) interface{} {
+	if b, _ := regexp.MatchString("X'[0-9a-f]*'", str); b {
+		bin, err := hex.DecodeString(str[2 : len(str)-1])
+		if err == nil {
+			log.Printf("Converted to binary %x", bin)
+			return bin
+		} else {
+			log.Error(err)
+		}
+	}
+	return str
 }
