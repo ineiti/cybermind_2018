@@ -72,6 +72,7 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		}
 		for i := range tags {
 			s.DataBase.Model(&tags[i]).Related(&tags[i].Objects, "Objects")
+			s.DataBase.Model(&tags[i]).Related(&tags[i].Tags, "Tags")
 		}
 		log.Print("Found Tags:", tags)
 		return []broker.Message{{
@@ -114,6 +115,7 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 			if err != nil {
 				return nil, err
 			}
+			log.Print("Stored Tag:", t, t.Objects)
 		}
 		printTags(s)
 	}

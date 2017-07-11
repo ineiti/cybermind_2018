@@ -17,7 +17,6 @@ import (
 	"fmt"
 
 	"github.com/dedis/crypto/random"
-	"github.com/jinzhu/gorm"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/dedis/onet.v1/log"
 )
@@ -67,11 +66,13 @@ func GetTemp(name string) string {
 // ObjectID represents any object
 const IDLen = 32
 
-type ObjectID []byte
 type ModuleID []byte
+type MessageID []byte
+type ObjectID []byte
 type TagID []byte
 type ActionID []byte
-type MessageID []byte
+type StatusID []byte
+type TagLinkID []byte
 
 func NewObjectID() ObjectID {
 	return random.Bytes(IDLen, random.Stream)
@@ -79,8 +80,8 @@ func NewObjectID() ObjectID {
 func NewModuleID() ModuleID {
 	return random.Bytes(IDLen, random.Stream)
 }
-func NewTagID() TagID {
-	return random.Bytes(IDLen, random.Stream)
+func NewTagID() uint64 {
+	return random.Uint64(random.Stream) / 2
 }
 func NewActionID() ActionID {
 	return random.Bytes(IDLen, random.Stream)
@@ -90,12 +91,11 @@ func NewMessageID() MessageID {
 }
 
 type Tag struct {
-	gorm.Model
+	GID       uint64 `gorm:"primary_key"`
 	Key       string
 	Value     string
 	Ephemeral bool
 	Objects   []Object `gorm:"many2many:ObjectTag;"`
-	GID       TagID
 }
 
 func NewTag(key, value string) Tag {
@@ -115,13 +115,23 @@ func (t *Tag) Hash() []byte {
 	} else {
 		hash.Write([]byte{0})
 	}
-	hash.Write(t.GID)
+	//hash.Write(t.GID)
 	return hash.Sum(nil)
 }
 
 func (t Tag) String() string {
-	return fmt.Sprintf(">%x:%s:%s - %t/%x - %s<", t.ID, t.Key, t.Value, t.Ephemeral,
-		t.GID[0:4], t.Objects)
+	var tags []string
+	for _, tag := range t.Tags {
+		tags = append(tags, fmt.Sprintf("%x", tag.GID))
+		//tags = append(tags, fmt.Sprintf("%x", tag.GID[0:4]))
+	}
+	var objs []string
+	for _, obj := range t.Objects {
+		objs = append(objs, fmt.Sprintf("%x", obj.GID[0:4]))
+	}
+	//return fmt.Sprintf("<<%x:[%t]%s=%s-%s/%s>>", t.GID[0:4], t.Ephemeral,
+	return fmt.Sprintf("<<%x:[%t]%s=%s-%s/%s>>", t.GID, t.Ephemeral,
+		t.Key, t.Value, objs, tags)
 }
 
 type KeyValue struct {

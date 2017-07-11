@@ -34,35 +34,26 @@ func TestGorm(t *testing.T) {
 	log.ErrFatal(err)
 	log.ErrFatal(db.AutoMigrate(&broker.Tags{}).Error)
 	log.ErrFatal(db.AutoMigrate(&broker.Object{}).Error)
-	obj := broker.Object{
-		GID:       broker.NewObjectID(),
-		ModuleID:  ModuleIDConfig,
-		StoreData: true,
-	}
-	obj2 := broker.Object{
-		GID:       broker.NewObjectID(),
-		ModuleID:  ModuleIDConfig,
-		StoreData: true,
-	}
-	log.ErrFatal(db.Create(&obj).Error)
+	objs := getObjs(2)
+	log.ErrFatal(db.Create(&objs[0]).Error)
 
 	tag := broker.Tag{
 		GID:     broker.NewTagID(),
-		Objects: []broker.Object{obj, obj2},
+		Objects: []broker.Object{objs[0], objs[1]},
 	}
 	log.Print(tag)
 	log.ErrFatal(db.Create(&tag).Error)
-	var objs []broker.Object
-	db.Find(&objs)
-	log.Print(objs)
-	log.Print(objs[0].ModuleID)
+	var objsRead []broker.Object
+	db.Find(&objsRead)
+	log.Print(objsRead)
+	log.Print(objsRead[0].ModuleID)
 
 	find := make(map[string]interface{})
 	find["module_id"] = []byte{0, 0, 0, 0}
 	db.LogMode(true)
 
-	db.Where(find).Find(&objs)
-	log.Print(objs)
+	db.Where(find).Find(&objsRead)
+	log.Print(objsRead)
 
 	var tags []broker.Tag
 	db.Find(&tags)
@@ -74,12 +65,8 @@ func TestGorm(t *testing.T) {
 func TestStorageSave(t *testing.T) {
 	sb := initStorageBroker(true)
 	sb.Broker.BroadcastMessage(&broker.Message{
-		Objects: []broker.Object{{
-			GID:       broker.NewObjectID(),
-			ModuleID:  ModuleIDConfig,
-			StoreData: true,
-		}},
-		Tags: broker.Tags{broker.NewTag("test", "123")},
+		Objects: getObjs(1),
+		Tags:    broker.Tags{broker.NewTag("test", "123")},
 	})
 	sb.Broker.Stop()
 
@@ -100,25 +87,11 @@ func TestStorageSave(t *testing.T) {
 
 func TestStorageSaveRelation(t *testing.T) {
 	sb := initStorageBroker(true)
-	objs := []broker.Object{
-		{
-			GID:       broker.NewObjectID(),
-			ModuleID:  ModuleIDConfig,
-			StoreData: true,
-			Data:      []byte("one"),
-		},
-		{
-			GID:       broker.NewObjectID(),
-			ModuleID:  ModuleIDConfig,
-			StoreData: true,
-			Data:      []byte("two"),
-		},
-	}
 	tags := broker.Tags{broker.NewTag("test", "123"),
 		broker.NewTag("test2", "456")}
 
 	sb.Broker.BroadcastMessage(&broker.Message{
-		Objects: objs,
+		Objects: getObjs(2),
 		Tags:    tags,
 	})
 	sb.Broker.Stop()
@@ -146,6 +119,32 @@ func TestStorageSaveRelation(t *testing.T) {
 	sb.Broker.Stop()
 }
 
+func TestStorageTagTags(t *testing.T) {
+	sb := initStorageBroker(true)
+	tags := broker.Tags{broker.NewTag("test", "123"),
+		broker.NewTag("test2", "456"),
+		broker.NewTag("test3", "789")}
+	tags[2].Tags = []broker.Tag{tags[0], tags[1]}
+
+	sb.Broker.BroadcastMessage(&broker.Message{
+		Tags: tags,
+	})
+	log.Print(tags)
+	sb.Broker.Stop()
+
+	log.Lvl1("Starting new broker")
+	sb = initStorageBroker(false)
+	sb.Broker.BroadcastMessage(&broker.Message{
+		Action: broker.Action{
+			Command:   StorageSearchTag,
+			Arguments: map[string]string{},
+		},
+	})
+	log.Print(sb.Logger.Messages)
+	require.Equal(t, 2, len(sb.Logger.Messages))
+	sb.Broker.Stop()
+}
+
 type storBrok struct {
 	Broker *broker.Broker
 	Logger *test.Logger
@@ -162,4 +161,16 @@ func initStorageBroker(clear bool) *storBrok {
 	RegisterStorage(sb.Broker)
 	sb.Logger = test.SpawnLogger(sb.Broker)
 	return sb
+}
+
+func getObjs(num int) []broker.Object {
+	var objs []broker.Object
+	for n := 0; n < num; n++ {
+		objs = append(objs, broker.Object{
+			GID:       broker.NewObjectID(),
+			ModuleID:  ModuleIDConfig,
+			StoreData: true,
+		})
+	}
+	return objs
 }

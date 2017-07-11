@@ -1,4 +1,5 @@
 fix tests
+    tag has tags relationship
     verify many-to-many relationship is OK
 x   better link tags and objects - perhaps using gorm's many-to-many relationship?
 - 170706
