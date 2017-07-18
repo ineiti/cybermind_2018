@@ -11,14 +11,16 @@ import (
 
 func TestRegisterToml(t *testing.T) {
 	tt := initTest(0)
-	require.NotNil(t, tt.Toml)
+	defer tt.Broker.Stop()
+	require.NotNil(t, tt.Config)
 }
 
-func TestToml_ProcessMessage(t *testing.T) {
+func TestConfig_ProcessMessage(t *testing.T) {
 	log.Lvl1("Creating first testInput-module")
 	tt := initTest(0)
 	log.ErrFatal(tt.Broker.Start())
 	log.ErrFatal(tt.Broker.BroadcastMessage(&broker.Message{
+		ID: broker.NewMessageID(),
 		Action: broker.Action{
 			Command: broker.SubDomain("spawn", "config"),
 			Arguments: map[string]string{
@@ -26,25 +28,29 @@ func TestToml_ProcessMessage(t *testing.T) {
 			},
 		},
 	}))
+	require.Equal(t, 3, len(tt.Broker.Modules))
 	log.ErrFatal(tt.Broker.Stop())
 
 	log.Lvl1("Re-starting broker and checking for testInput-Module")
 	tt = initTest(0)
+	defer tt.Broker.Stop()
 	log.ErrFatal(tt.Broker.Start())
-	require.Equal(t, 2, len(tt.Broker.Modules))
+	require.Equal(t, 3, len(tt.Broker.Modules))
+	require.Equal(t, test.ModuleTestInput, tt.Broker.ModuleNames[2])
 }
 
-type testToml struct {
+type testConfig struct {
 	Broker *broker.Broker
-	Toml   *Config
+	Config *Config
 }
 
-func initTest(cmd int) *testToml {
-	tt := &testToml{
+func initTest(cmd int) *testConfig {
+	tt := &testConfig{
 		Broker: broker.NewBroker(),
 	}
 	log.ErrFatal(RegisterConfig(tt.Broker))
-	tt.Toml = tt.Broker.Modules[0].(*Config)
+	log.ErrFatal(RegisterStorage(tt.Broker))
+	tt.Config = tt.Broker.Modules[0].(*Config)
 	log.ErrFatal(test.RegisterTestInput(tt.Broker))
 	return tt
 }

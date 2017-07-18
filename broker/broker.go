@@ -3,7 +3,6 @@ package broker
 import (
 	"errors"
 
-	"gopkg.in/dedis/crypto.v0/random"
 	"gopkg.in/dedis/onet.v1/log"
 )
 
@@ -18,6 +17,7 @@ var BrokerStop = "stop"
 type Broker struct {
 	ModuleTypes map[string]ModuleRegistration
 	Modules     []Module
+	ModuleNames []string
 }
 
 func NewBroker() *Broker {
@@ -37,15 +37,20 @@ func (b *Broker) RegisterModule(name string, reg ModuleRegistration) error {
 	return nil
 }
 
-func (b *Broker) SpawnModule(module string, msg *Message) error {
+func (b *Broker) SpawnModule(module string, msg *Message) (Module, error ){
 	m, ok := b.ModuleTypes[module]
 	if !ok {
-		return errors.New("didn't find this module-type")
+		return nil, errors.New("didn't find this module-type")
 	}
-	b.Modules = append(b.Modules, m(b, msg))
+	mod := m(b, msg)
+	if mod == nil {
+		return nil, errors.New("Couldn't spawn module: " + module)
+	}
+	b.Modules = append(b.Modules, mod)
+	b.ModuleNames = append(b.ModuleNames, module)
 	log.Lvl2("Spawned module", module)
 	log.Lvl3("Module-list is now", b.Modules)
-	return nil
+	return mod, nil
 }
 
 func (b *Broker) Start() error {
@@ -57,10 +62,13 @@ func (b *Broker) Start() error {
 }
 
 func (b *Broker) BroadcastMessage(msg *Message) error {
-	log.Lvl3("asking all modules to process message", msg)
+	if msg != nil && msg.ID == nil {
+		log.Error("empty id for", log.Stack())
+	}
+	log.Lvl3("asking all modules", b.ModuleNames, "to process message", msg)
 	var msgs []Message
-	for name, m := range b.Modules {
-		log.Lvl3("asking module", name, "to process message")
+	for index, m := range b.Modules {
+		log.Lvl3("asking module", b.ModuleNames[index], m, "to process message", msg)
 		ms, err := m.ProcessMessage(msg)
 		if err != nil {
 			return err
@@ -76,17 +84,10 @@ func (b *Broker) BroadcastMessage(msg *Message) error {
 	return nil
 }
 
-func (b *Broker) NewObject(id ModuleID, data []byte) *Object {
-	return &Object{
-		ModuleID: id,
-		GID:      random.Bytes(IDLen, random.Stream),
-		Data:     data,
-	}
-}
-
 func (b *Broker) Stop() error {
 	log.Lvl2("Stopping broker")
 	b.BroadcastMessage(&Message{
+		ID:     NewMessageID(),
 		Action: Action{Command: BrokerStop},
 	})
 	return nil

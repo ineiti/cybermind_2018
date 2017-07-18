@@ -12,7 +12,7 @@ func RegisterFiles(b *broker.Broker) error {
 	return b.RegisterModule("files", NewFiles)
 }
 
-func NewFiles(b *broker.Broker, config []byte) broker.Module {
+func NewFiles(b *broker.Broker, msg *broker.Message) broker.Module {
 	return &Files{}
 }
 

@@ -15,9 +15,6 @@ import (
 	"gopkg.in/dedis/onet.v1/log"
 )
 
-var StorageSave = broker.NewTag(broker.SubDomain("save", "storage"), "true")
-var StorageSaveTags = broker.Tags{StorageSave}
-
 var StorageSearchTag = broker.SubDomain("search_tag", "storage")
 var StorageSearchObject = broker.SubDomain("search_obj", "storage")
 
@@ -35,7 +32,8 @@ func RegisterStorage(b *broker.Broker) error {
 	if err != nil {
 		return err
 	}
-	return b.SpawnModule(ModuleStorage, nil)
+	_, err = b.SpawnModule(ModuleStorage, nil)
+	return err
 }
 
 func NewStorage(b *broker.Broker, msg *broker.Message) broker.Module {
@@ -49,21 +47,25 @@ func NewStorage(b *broker.Broker, msg *broker.Message) broker.Module {
 	log.ErrFatal(err)
 	log.ErrFatal(s.DataBase.AutoMigrate(&broker.Tags{}).Error)
 	log.ErrFatal(s.DataBase.AutoMigrate(&broker.Object{}).Error)
-	//log.ErrFatal(s.DataBase.Model(&broker.Tag{}).
-	//	Related(&broker.Object{}, "Objects").Error)
+	log.ErrFatal(s.DataBase.AutoMigrate(&broker.TagAssociation{}).Error)
+	log.Lvl2("Initialized database")
 	return s
 }
 
 func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
+	log.Lvlf3("Message is: %+v", m)
+	if m == nil {
+		return nil, nil
+	}
 	switch m.Action.Command {
 	case broker.BrokerStop:
-		log.Print("Closing database")
+		log.Lvl2("Closing database")
 		if err := s.DataBase.Close(); err != nil {
 			log.Error(err)
 		}
 		return nil, nil
 	case StorageSearchTag:
-		log.Print("Search")
+		log.Lvl3("Searching", m.Action.Arguments)
 		find := createFind(m.Action.Arguments)
 		var tags []broker.Tag
 		err := s.DataBase.Where(find).Find(&tags).Error
@@ -72,9 +74,18 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		}
 		for i := range tags {
 			s.DataBase.Model(&tags[i]).Related(&tags[i].Objects, "Objects")
-			s.DataBase.Model(&tags[i]).Related(&tags[i].Tags, "Tags")
+			s.DataBase.Model(&tags[i]).Related(&tags[i].TagA, "TagA")
+			// We arbitrarily decide that two levels of 'Related' are
+			// enough - if you need more, do another `StorageSearchTag`
+			// call.
+			for j := range tags[i].TagA {
+				s.DataBase.Model(&tags[i].TagA).Related(&tags[i].TagA[j].Tags, "Tags")
+			}
 		}
-		log.Print("Found Tags:", tags)
+		if len(tags) == 0 {
+			log.Lvl3("Didn't find any tags for", find)
+		}
+		log.Lvl3("Found Tags:", tags)
 		return []broker.Message{{
 			Tags: tags,
 		}}, nil
@@ -84,40 +95,54 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		err := s.DataBase.Where(find).Find(&objs).Error
 		if err != nil {
 			log.Error(err)
+			return nil, nil
 		}
 		for i := range objs {
 			s.DataBase.Model(&objs[i]).Related(&objs[i].Tags, "Tags")
 		}
-		log.Print("Found Objs:", objs)
+		if len(objs) == 0 {
+			log.Lvlf3("Didn't find any objects for %#v", find)
+			return nil, nil
+		}
+		log.Lvl3("Found Objs:", objs)
 		return []broker.Message{{
+			ID:      broker.NewMessageID(),
 			Objects: objs,
 		}}, nil
 	default:
 	}
 	for i, o := range m.Objects {
-		if o.StoreData {
-			log.Print("Storing Object:", o)
-			o.StoreData = false
-			err := s.DataBase.Create(&m.Objects[i]).Error
-			if err != nil {
-				return nil, err
-			}
+		obj := o.Copy()
+		if o.IgnoreData {
+			obj.Data = []byte{}
 		}
-		printObjects(s)
+		if o.ID > 0 {
+			log.Lvl2("Not storing already indexed object")
+			continue
+		}
+		err := s.DataBase.Create(&m.Objects[i]).Error
+		if err != nil {
+			return nil, err
+		}
+		log.Lvl3("Stored Object:", o)
 	}
 	for _, t := range m.Tags {
 		if !t.Ephemeral {
+			if t.ID > 0 {
+				log.Lvl2("Not storing already indexed tag")
+				continue
+			}
 			for _, o := range m.Objects {
 				t.Objects = append(t.Objects, o)
 			}
-			log.Print("Storing Tag:", t, t.Objects)
 			err := s.DataBase.Create(&t).Error
 			if err != nil {
 				return nil, err
 			}
-			log.Print("Stored Tag:", t, t.Objects)
+			log.Lvl3("Stored Tag:", t, t.Objects)
 		}
-		printTags(s)
+		//printTags(s)
+		//printObjects(s)
 	}
 	return nil, nil
 }
@@ -139,7 +164,7 @@ func createFind(args map[string]string) map[string]interface{} {
 	for k, v := range args {
 		switch k {
 		default:
-			log.Printf("Adding search-argument %s/%s", k, v)
+			log.Lvlf4("Adding search-argument %s/%s", k, v)
 			find[k] = interpretString(v)
 		}
 	}
@@ -150,7 +175,7 @@ func interpretString(str string) interface{} {
 	if b, _ := regexp.MatchString("X'[0-9a-f]*'", str); b {
 		bin, err := hex.DecodeString(str[2 : len(str)-1])
 		if err == nil {
-			log.Printf("Converted to binary %x", bin)
+			log.Lvlf4("Converted to binary %#v", bin)
 			return bin
 		} else {
 			log.Error(err)

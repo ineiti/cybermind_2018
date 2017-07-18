@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	"github.com/dedis/crypto/random"
+	"github.com/jinzhu/gorm"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/dedis/onet.v1/log"
 )
@@ -90,12 +91,73 @@ func NewMessageID() MessageID {
 	return random.Bytes(IDLen, random.Stream)
 }
 
+type Object struct {
+	gorm.Model
+	GID        ObjectID
+	ModuleID   ModuleID
+	Data       []byte
+	Tags       Tags `gorm:"many2many:ObjectTag;"`
+	IgnoreData bool
+}
+
+func NewObject(id ModuleID, data []byte) *Object {
+	return &Object{
+		ModuleID: id,
+		GID:      random.Bytes(IDLen, random.Stream),
+		Data:     data,
+	}
+}
+
+func (o *Object) Hash() []byte {
+	hash := sha256.New()
+	hash.Write(o.GID)
+	hash.Write(o.ModuleID)
+	hash.Write(o.Data)
+	return hash.Sum(nil)
+}
+
+func (o Object) String() string {
+	dataLen := len(o.Data)
+	if dataLen > 4 {
+		dataLen = 4
+	}
+	return fmt.Sprintf(">%x:%x/%x - %t/%x - %s<", o.ID, o.ModuleID[0:4], o.Data[0:dataLen],
+		o.IgnoreData, o.GID[0:4], o.Tags)
+}
+
+func (o Object) Copy() Object {
+	return Object{
+		GID:        o.GID,
+		ModuleID:   o.ModuleID,
+		Data:       o.Data,
+		Tags:       o.Tags,
+		IgnoreData: o.IgnoreData,
+	}
+}
+
 type Tag struct {
-	GID       uint64 `gorm:"primary_key"`
+	ID        uint64
+	GID       uint64
 	Key       string
 	Value     string
 	Ephemeral bool
-	Objects   []Object `gorm:"many2many:ObjectTag;"`
+	Objects   []Object         `gorm:"many2many:ObjectTag;"`
+	TagA      []TagAssociation `gorm:"many2many:TagIsA;"`
+}
+
+type IsAssociation uint64
+
+const (
+	AssociationIsA IsAssociation = iota
+	AssociationEquals
+	AssociationTranslation
+	AssociationAbbreviation
+)
+
+type TagAssociation struct {
+	ID          uint64
+	Association uint64
+	Tags        Tags `gorm:"many2many:TagIsA;"`
 }
 
 func NewTag(key, value string) Tag {
@@ -121,8 +183,8 @@ func (t *Tag) Hash() []byte {
 
 func (t Tag) String() string {
 	var tags []string
-	for _, tag := range t.Tags {
-		tags = append(tags, fmt.Sprintf("%x", tag.GID))
+	for _, tag := range t.TagA {
+		tags = append(tags, fmt.Sprintf("%x:%s", tag.Association, tag.Tags))
 		//tags = append(tags, fmt.Sprintf("%x", tag.GID[0:4]))
 	}
 	var objs []string
@@ -132,6 +194,16 @@ func (t Tag) String() string {
 	//return fmt.Sprintf("<<%x:[%t]%s=%s-%s/%s>>", t.GID[0:4], t.Ephemeral,
 	return fmt.Sprintf("<<%x:[%t]%s=%s-%s/%s>>", t.GID, t.Ephemeral,
 		t.Key, t.Value, objs, tags)
+}
+
+// AddAssociation adds one or more tags with a given association.
+func (t *Tag) AddAssociation(tags []Tag, asso IsAssociation) TagAssociation {
+	tia := TagAssociation{
+		Association: uint64(asso),
+		Tags:        tags,
+	}
+	t.TagA = append(t.TagA, tia)
+	return tia
 }
 
 type KeyValue struct {
@@ -181,9 +253,9 @@ type Tags []Tag
 
 func (t Tags) GetLastValue(key string) *Tag {
 	var last *Tag
-	for _, tag := range t {
+	for i, tag := range t {
 		if tag.Key == key {
-			last = &tag
+			last = &t[i]
 		}
 	}
 	return last
@@ -215,7 +287,7 @@ func (m *Message) Hash() []byte {
 }
 
 func (m *Message) String() string {
-	var str []string
+	str := []string{fmt.Sprintf("%x", m.ID[0:4])}
 	var objs []string
 	for _, o := range m.Objects {
 		objs = append(objs, fmt.Sprintf("ID: %x - ModuleID: %x",

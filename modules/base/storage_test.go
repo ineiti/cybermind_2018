@@ -7,64 +7,18 @@ import (
 
 	"fmt"
 
-	"regexp"
-
 	"os"
 
 	"github.com/ineiti/cybermind/broker"
 	"github.com/ineiti/cybermind/modules/test"
-	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/dedis/onet.v1/log"
 )
 
-type TestStruct struct {
-	gorm.Model
-	Key   string
-	Value string
-}
-
-func TestReg(t *testing.T) {
-	log.Print(regexp.MatchString("X'[0-9a-f]*'", "X'1234'"))
-}
-
-func TestGorm(t *testing.T) {
-	path := filepath.Join(broker.ConfigPath, StorageDB)
-	db, err := gorm.Open("sqlite3", path)
-	log.ErrFatal(err)
-	log.ErrFatal(db.AutoMigrate(&broker.Tags{}).Error)
-	log.ErrFatal(db.AutoMigrate(&broker.Object{}).Error)
-	objs := getObjs(2)
-	log.ErrFatal(db.Create(&objs[0]).Error)
-
-	tag := broker.Tag{
-		GID:     broker.NewTagID(),
-		Objects: []broker.Object{objs[0], objs[1]},
-	}
-	log.Print(tag)
-	log.ErrFatal(db.Create(&tag).Error)
-	var objsRead []broker.Object
-	db.Find(&objsRead)
-	log.Print(objsRead)
-	log.Print(objsRead[0].ModuleID)
-
-	find := make(map[string]interface{})
-	find["module_id"] = []byte{0, 0, 0, 0}
-	db.LogMode(true)
-
-	db.Where(find).Find(&objsRead)
-	log.Print(objsRead)
-
-	var tags []broker.Tag
-	db.Find(&tags)
-	db.Model(&tags[0]).Related(&tags[0].Objects, "Objects")
-	log.Print(tags)
-
-}
-
 func TestStorageSave(t *testing.T) {
 	sb := initStorageBroker(true)
 	sb.Broker.BroadcastMessage(&broker.Message{
+		ID:      broker.NewMessageID(),
 		Objects: getObjs(1),
 		Tags:    broker.Tags{broker.NewTag("test", "123")},
 	})
@@ -73,6 +27,7 @@ func TestStorageSave(t *testing.T) {
 	log.Lvl1("Starting new broker")
 	sb = initStorageBroker(false)
 	sb.Broker.BroadcastMessage(&broker.Message{
+		ID: broker.NewMessageID(),
 		Action: broker.Action{
 			Command: StorageSearchObject,
 			Arguments: map[string]string{
@@ -85,12 +40,40 @@ func TestStorageSave(t *testing.T) {
 	sb.Broker.Stop()
 }
 
+func TestStorageSaveTagsObject(t *testing.T) {
+	sb := initStorageBroker(true)
+	sb.Broker.BroadcastMessage(&broker.Message{
+		ID:      broker.NewMessageID(),
+		Objects: getObjs(1),
+		Tags:    getTags(2),
+	})
+	sb.Broker.Stop()
+
+	log.Lvl1("Starting new broker")
+	sb = initStorageBroker(false)
+	sb.Broker.BroadcastMessage(&broker.Message{
+		ID: broker.NewMessageID(),
+		Action: broker.Action{
+			Command: StorageSearchObject,
+			Arguments: map[string]string{
+				"module_id": fmt.Sprintf("X'%x'", ModuleIDConfig),
+			},
+		},
+	})
+	log.Print(sb.Logger.Messages)
+	require.Equal(t, 2, len(sb.Logger.Messages))
+	find := sb.Logger.Messages[1]
+	require.Equal(t, 1, len(find.Objects))
+	sb.Broker.Stop()
+}
+
 func TestStorageSaveRelation(t *testing.T) {
 	sb := initStorageBroker(true)
 	tags := broker.Tags{broker.NewTag("test", "123"),
 		broker.NewTag("test2", "456")}
 
 	sb.Broker.BroadcastMessage(&broker.Message{
+		ID:      broker.NewMessageID(),
 		Objects: getObjs(2),
 		Tags:    tags,
 	})
@@ -99,6 +82,7 @@ func TestStorageSaveRelation(t *testing.T) {
 	log.Lvl1("Starting new broker")
 	sb = initStorageBroker(false)
 	sb.Broker.BroadcastMessage(&broker.Message{
+		ID: broker.NewMessageID(),
 		Action: broker.Action{
 			Command: StorageSearchTag,
 			Arguments: map[string]string{
@@ -107,14 +91,6 @@ func TestStorageSaveRelation(t *testing.T) {
 		},
 	})
 	log.Print(sb.Logger.Messages)
-	//sb.Broker.BroadcastMessage(&broker.Message{
-	//	Action: broker.Action{
-	//		Command: StorageSearchTag,
-	//		Arguments: map[string]string{
-	//			"object_gid": fmt.Sprintf("X'%x'", sb.Logger.Messages[1].Objects[0].GID),
-	//		},
-	//	},
-	//})
 	require.Equal(t, 2, len(sb.Logger.Messages))
 	sb.Broker.Stop()
 }
@@ -124,9 +100,10 @@ func TestStorageTagTags(t *testing.T) {
 	tags := broker.Tags{broker.NewTag("test", "123"),
 		broker.NewTag("test2", "456"),
 		broker.NewTag("test3", "789")}
-	tags[2].Tags = []broker.Tag{tags[0], tags[1]}
+	(&tags[2]).AddAssociation([]broker.Tag{tags[0], tags[1]}, broker.AssociationIsA)
 
 	sb.Broker.BroadcastMessage(&broker.Message{
+		ID:   broker.NewMessageID(),
 		Tags: tags,
 	})
 	log.Print(tags)
@@ -135,13 +112,20 @@ func TestStorageTagTags(t *testing.T) {
 	log.Lvl1("Starting new broker")
 	sb = initStorageBroker(false)
 	sb.Broker.BroadcastMessage(&broker.Message{
+		ID: broker.NewMessageID(),
 		Action: broker.Action{
 			Command:   StorageSearchTag,
-			Arguments: map[string]string{},
+			Arguments: map[string]string{"Key": "test3"},
 		},
 	})
 	log.Print(sb.Logger.Messages)
 	require.Equal(t, 2, len(sb.Logger.Messages))
+	require.Equal(t, 1, len(sb.Logger.Messages[1].Tags))
+	tag := sb.Logger.Messages[1].Tags[0]
+	require.Equal(t, 1, len(tag.TagA))
+	log.Print(tag.TagA[0].Tags)
+	require.Equal(t, 3, len(tag.TagA[0].Tags))
+	require.Equal(t, uint64(broker.AssociationIsA), tag.TagA[0].Association)
 	sb.Broker.Stop()
 }
 
@@ -167,10 +151,16 @@ func getObjs(num int) []broker.Object {
 	var objs []broker.Object
 	for n := 0; n < num; n++ {
 		objs = append(objs, broker.Object{
-			GID:       broker.NewObjectID(),
-			ModuleID:  ModuleIDConfig,
-			StoreData: true,
+			GID:      broker.NewObjectID(),
+			ModuleID: ModuleIDConfig,
 		})
 	}
 	return objs
+}
+
+func getTags(num int) []broker.Tag {
+	tags := broker.Tags{broker.NewTag("test", "123"),
+		broker.NewTag("test2", "456"),
+		broker.NewTag("test3", "789")}
+	return tags[0:num]
 }

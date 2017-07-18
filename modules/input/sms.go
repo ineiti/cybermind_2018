@@ -16,7 +16,7 @@ func RegisterSMS(b *broker.Broker) error {
 	return b.RegisterModule("sms", NewSMS)
 }
 
-func NewSMS(b *broker.Broker, config []byte) broker.Module {
+func NewSMS(b *broker.Broker, msg *broker.Message) broker.Module {
 	return &SMS{}
 }
 
