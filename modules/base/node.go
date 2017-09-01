@@ -13,7 +13,7 @@ import (
 A node runs on a device and has its own configuration.
 */
 
-const moduleNode = "Node"
+const ModuleNode = "Node"
 
 type Node struct {
 	Name string
@@ -24,7 +24,7 @@ type Node struct {
 }
 
 func RegisterNode(b *broker.Broker) error {
-	err := b.RegisterModule(moduleNode, NewNode)
+	err := b.RegisterModule(ModuleNode, NewNode)
 	if err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func RegisterNode(b *broker.Broker) error {
 	return nil
 }
 
-func NewNode(b *broker.Broker, msg *broker.Message) broker.Module {
+func NewNode(b *broker.Broker, id broker.ModuleID, msg *broker.Message) broker.Module {
 	node := &Node{
 		broker: b,
 	}

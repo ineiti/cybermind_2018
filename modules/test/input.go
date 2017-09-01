@@ -15,7 +15,7 @@ func RegisterTestInput(b *broker.Broker) error {
 	return b.RegisterModule(ModuleTestInput, NewTestInput)
 }
 
-func NewTestInput(b *broker.Broker, msg *broker.Message) broker.Module {
+func NewTestInput(b *broker.Broker, id broker.ModuleID, msg *broker.Message) broker.Module {
 	return &TestInput{
 		Broker: b,
 	}

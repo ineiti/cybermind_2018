@@ -28,15 +28,15 @@ func TestConfig_ProcessMessage(t *testing.T) {
 			},
 		},
 	}))
-	require.Equal(t, 3, len(tt.Broker.Modules))
+	require.Equal(t, 3, len(tt.Broker.ModuleEntries))
 	log.ErrFatal(tt.Broker.Stop())
 
 	log.Lvl1("Re-starting broker and checking for testInput-Module")
 	tt = initTest(0)
 	defer tt.Broker.Stop()
 	log.ErrFatal(tt.Broker.Start())
-	require.Equal(t, 3, len(tt.Broker.Modules))
-	require.Equal(t, test.ModuleTestInput, tt.Broker.ModuleNames[2])
+	require.Equal(t, 3, len(tt.Broker.ModuleEntries))
+	require.Equal(t, test.ModuleTestInput, tt.Broker.ModuleEntries[2].Name)
 }
 
 type testConfig struct {
@@ -50,7 +50,7 @@ func initTest(cmd int) *testConfig {
 	}
 	log.ErrFatal(RegisterConfig(tt.Broker))
 	log.ErrFatal(RegisterStorage(tt.Broker))
-	tt.Config = tt.Broker.Modules[0].(*Config)
+	tt.Config = tt.Broker.ModuleEntries[0].Module.(*Config)
 	log.ErrFatal(test.RegisterTestInput(tt.Broker))
 	return tt
 }

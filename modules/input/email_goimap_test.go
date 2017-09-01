@@ -17,24 +17,21 @@ import (
 )
 
 func TestGoImap(t *testing.T) {
-	serv := startServer()
-	log.Print("Connecting to server...")
+	serv := startIMAPServer()
+	log.Lvl1("Connecting to server...")
 
 	// Connect to server
 	c, err := client.Dial("localhost:1143")
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Print("Connected")
-
-	// Don't forget to logout
-	defer c.Logout()
+	log.Lvl1("Connected")
 
 	// Login
 	if err := c.Login("username", "password"); err != nil {
 		log.Fatal(err)
 	}
-	log.Print("Logged in")
+	log.Lvl1("Logged in")
 
 	// List mailboxes
 	mailboxes := make(chan *imap.MailboxInfo, 10)
@@ -43,9 +40,9 @@ func TestGoImap(t *testing.T) {
 		done <- c.List("", "*", mailboxes)
 	}()
 
-	log.Print("Mailboxes:")
+	log.Lvl1("Mailboxes:")
 	for m := range mailboxes {
-		log.Print("* " + m.Name)
+		log.Lvl1("* " + m.Name)
 	}
 
 	if err := <-done; err != nil {
@@ -57,7 +54,7 @@ func TestGoImap(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Print("Flags for INBOX:", mbox.Flags)
+	log.Lvl1("Flags for INBOX:", mbox.Flags)
 
 	// Get the last 4 messages
 	from := uint32(1)
@@ -75,21 +72,23 @@ func TestGoImap(t *testing.T) {
 		done <- c.Fetch(seqset, []string{imap.EnvelopeMsgAttr}, messages)
 	}()
 
-	log.Print("Last 4 messages:")
+	log.Lvl1("Last 4 messages:")
 	for msg := range messages {
-		log.Print("* " + msg.Envelope.Subject)
+		log.Lvl1("* " + msg.Envelope.Subject)
 	}
 
 	if err := <-done; err != nil {
 		log.Fatal(err)
 	}
-
+	c.Logout()
+	<-c.LoggedOut()
+	c.Close()
 	serv.Close()
-	log.Print("Done!")
+	log.Lvl1("Done!")
 }
 
-func startServer() *server.Server {
-	log.Print("Starting server")
+func startIMAPServer() *server.Server {
+	log.Lvl3("Starting server")
 	// Create a memory backend
 	be := memory.New()
 	user, err := be.Login("username", "password")
@@ -120,15 +119,16 @@ Hi there :)`
 	// authentication over unencrypted connections
 	s.AllowInsecureAuth = true
 
-	log.Print("Starting IMAP server at localhost:1143")
+	log.Lvl1("Starting IMAP server at localhost:1143")
 	go func() {
 		if err := s.ListenAndServe(); err != nil {
 			if strings.Contains(err.Error(), "use of closed") {
-				log.Lvl2("Quitting server")
+				log.LLvl2("Quitting server")
 				return
 			}
 			log.Fatal(err)
 		}
+		log.Print()
 	}()
 	return s
 }

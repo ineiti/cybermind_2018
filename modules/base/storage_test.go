@@ -26,15 +26,8 @@ func TestStorageSave(t *testing.T) {
 
 	log.Lvl1("Starting new broker")
 	sb = initStorageBroker(false)
-	sb.Broker.BroadcastMessage(&broker.Message{
-		ID: broker.NewMessageID(),
-		Action: broker.Action{
-			Command: StorageSearchObject,
-			Arguments: map[string]string{
-				"module_id": fmt.Sprintf("X'%x'", ModuleIDConfig),
-			},
-		},
-	})
+	modId := broker.NewKeyValue("module_id", fmt.Sprintf("X'%x'", ModuleIDConfig))
+	sb.Broker.BroadcastMessage(StorageSearchObject(modId))
 	log.Print(sb.Logger.Messages)
 	require.Equal(t, 2, len(sb.Logger.Messages))
 	sb.Broker.Stop()
@@ -54,7 +47,7 @@ func TestStorageSaveTagsObject(t *testing.T) {
 	sb.Broker.BroadcastMessage(&broker.Message{
 		ID: broker.NewMessageID(),
 		Action: broker.Action{
-			Command: StorageSearchObject,
+			Command: storageActionSearchObject,
 			Arguments: map[string]string{
 				"module_id": fmt.Sprintf("X'%x'", ModuleIDConfig),
 			},
@@ -81,15 +74,7 @@ func TestStorageSaveRelation(t *testing.T) {
 
 	log.Lvl1("Starting new broker")
 	sb = initStorageBroker(false)
-	sb.Broker.BroadcastMessage(&broker.Message{
-		ID: broker.NewMessageID(),
-		Action: broker.Action{
-			Command: StorageSearchTag,
-			Arguments: map[string]string{
-				"key": "test",
-			},
-		},
-	})
+	log.ErrFatal(sb.Broker.BroadcastMessage(StorageSearchTag(broker.NewKeyValue("key", "test"))))
 	log.Print(sb.Logger.Messages)
 	require.Equal(t, 2, len(sb.Logger.Messages))
 	sb.Broker.Stop()
@@ -114,7 +99,7 @@ func TestStorageTagTags(t *testing.T) {
 	sb.Broker.BroadcastMessage(&broker.Message{
 		ID: broker.NewMessageID(),
 		Action: broker.Action{
-			Command:   StorageSearchTag,
+			Command:   storageActionSearchTag,
 			Arguments: map[string]string{"Key": "test3"},
 		},
 	})

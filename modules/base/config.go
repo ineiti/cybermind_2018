@@ -26,11 +26,11 @@ func RegisterConfig(b *broker.Broker) error {
 	if err != nil {
 		return err
 	}
-	_, err = b.SpawnModule(ModuleConfig, nil)
+	_, err = b.SpawnModule(ModuleConfig, ModuleIDConfig, nil)
 	return err
 }
 
-func NewConfig(b *broker.Broker, msg *broker.Message) broker.Module {
+func NewConfig(b *broker.Broker, id broker.ModuleID, msg *broker.Message) broker.Module {
 	return &Config{
 		Broker: b,
 	}
@@ -39,7 +39,9 @@ func NewConfig(b *broker.Broker, msg *broker.Message) broker.Module {
 func (c *Config) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 	if m == nil {
 		log.Lvl2("Reading config and spawning modules")
-		if err := c.GetConfigs(); err != nil {
+		msg := StorageSearchObject(broker.NewKeyValue("module_id", fmt.Sprintf("X'%x'", ModuleIDConfig)))
+		err := c.Broker.BroadcastMessage(&msg)
+		if err != nil {
 			return nil, err
 		}
 	} else {
@@ -54,19 +56,6 @@ func (c *Config) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		}
 	}
 	return nil, nil
-}
-
-func (c *Config) GetConfigs() error {
-	return c.Broker.BroadcastMessage(&broker.Message{
-		ID: broker.NewMessageID(),
-		Action: broker.Action{
-			Command: StorageSearchObject,
-			Arguments: map[string]string{
-				"module_id": fmt.Sprintf("X'%x'", ModuleIDConfig),
-			},
-		},
-	})
-	return nil
 }
 
 func (c *Config) ConfigSpawn(msg *broker.Message) error {
@@ -88,12 +77,21 @@ func (c *Config) SpawnModules(objs []broker.Object) {
 			if module != nil {
 				log.Lvl2("Spawning new module", module)
 				msg := &broker.Message{
-					ID: broker.NewMessageID(),
-					Tags: broker.Tags{*obj.Tags.GetLastValue(ConfigData),
-						broker.NewTag("module_id", string(obj.Data))},
+					ID:   broker.NewMessageID(),
+					Tags: broker.Tags{*obj.Tags.GetLastValue(ConfigData)},
 				}
-				if _, err := c.Broker.SpawnModule(module.Value, msg); err != nil {
+				m, err := c.Broker.SpawnModule(module.Value, obj.Data, msg)
+				if err != nil {
 					log.Error("While spawning module", msg, err)
+				} else {
+					msgs, err := m.ProcessMessage(nil)
+					if err != nil {
+						log.Error("Couldn't process nil-message", err)
+					} else {
+						if err := c.Broker.BroadcastMessages(msgs); err != nil {
+							log.Error("Broadcasting messages:", err, msgs)
+						}
+					}
 				}
 			}
 		}

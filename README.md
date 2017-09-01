@@ -27,3 +27,11 @@ It is free as in GPLv3 or later, but we can offer you some additional services:
 * space for your data: backup and share data with others
 
 Of course we're happy to have feedback and additional modules for our cybermind.
+
+## State
+
+As of 18th of July 2017, Cybermind is in early development. 
+"Build one to throw one away". 
+Some basic structure is working, next step will
+be incorporating emails, then adding a UI and a server
+node.

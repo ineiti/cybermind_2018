@@ -16,6 +16,8 @@ import (
 
 	"fmt"
 
+	"unicode"
+
 	"github.com/dedis/crypto/random"
 	"github.com/jinzhu/gorm"
 	"github.com/mitchellh/go-homedir"
@@ -26,42 +28,8 @@ const BaseDomain = "cybermind.gasser.blue"
 
 var ConfigPath string
 
-func SubDomain(dom ...string) string {
-	return strings.Join(append(dom, BaseDomain), ".")
-}
-
 func init() {
 	ResetConfigPath()
-}
-
-func ResetConfigPath() {
-	// Create a somewhat reasonable default-config-path
-	switch runtime.GOOS {
-	case "darwin":
-		ConfigPath = "Library/CyberMind"
-	case "linux":
-		ConfigPath = ".config/cybermind"
-	default:
-		ConfigPath = "CyberMind"
-		log.Warn("sorry - this platform is not yet supported - please contact ineiti@gasser.blue")
-	}
-
-	d, err := homedir.Dir()
-	log.ErrFatal(err)
-	ConfigPath = filepath.Join(d, ConfigPath)
-}
-
-func TempConfigPath() (err error) {
-	ConfigPath, err = ioutil.TempDir("", "CyberMind")
-	return err
-}
-
-func GetTemp(name string) string {
-	f, err := ioutil.TempFile("", name)
-	log.ErrFatal(err)
-	f.Close()
-	os.Remove(f.Name())
-	return f.Name()
 }
 
 // ObjectID represents any object
@@ -73,12 +41,14 @@ type ObjectID []byte
 type TagID []byte
 type ActionID []byte
 type StatusID []byte
-type TagLinkID []byte
 
-func NewObjectID() ObjectID {
+func NewModuleID() ModuleID {
 	return random.Bytes(IDLen, random.Stream)
 }
-func NewModuleID() ModuleID {
+func NewMessageID() MessageID {
+	return random.Bytes(IDLen, random.Stream)
+}
+func NewObjectID() ObjectID {
 	return random.Bytes(IDLen, random.Stream)
 }
 func NewTagID() uint64 {
@@ -87,8 +57,64 @@ func NewTagID() uint64 {
 func NewActionID() ActionID {
 	return random.Bytes(IDLen, random.Stream)
 }
-func NewMessageID() MessageID {
-	return random.Bytes(IDLen, random.Stream)
+
+type Module interface {
+	ProcessMessage(m *Message) ([]Message, error)
+}
+
+type Message struct {
+	ID        MessageID
+	Objects   []Object
+	Tags      Tags
+	Action    Action
+	Status    Status
+	Signature []byte
+}
+
+func NewMessage(objs *[]Object, tags *Tags, action *Action, status *Status) Message {
+	return Message{
+		ID:      NewMessageID(),
+		Objects: *objs,
+		Tags:    *tags,
+		Action:  *action,
+		Status:  *status,
+	}
+}
+
+func (m *Message) Hash() []byte {
+	hash := sha256.New()
+	for _, o := range m.Objects {
+		hash.Write(o.Hash())
+	}
+	for _, t := range m.Tags {
+		hash.Write(t.Hash())
+	}
+	hash.Write(m.Action.Hash())
+	hash.Write(m.ID)
+	return hash.Sum(nil)
+}
+
+func (m *Message) String() string {
+	str := []string{fmt.Sprintf("%x", m.ID[0:4])}
+	var objs []string
+	for _, o := range m.Objects {
+		objs = append(objs, fmt.Sprintf("ID: %x - ModuleID: %x",
+			o.GID[0:4], o.ModuleID[0:4]))
+	}
+	if len(objs) > 0 {
+		str = append(str, fmt.Sprintf("objects: [%s]", strings.Join(objs, ",")))
+	}
+	var tags []string
+	for _, t := range m.Tags {
+		tags = append(tags, fmt.Sprintf("{'%s':%+q}", t.Key, t.Value))
+	}
+	if len(tags) > 0 {
+		str = append(str, fmt.Sprintf("tags: [%s]", strings.Join(tags, ",")))
+	}
+	if m.Action.Command != "" {
+		str = append(str, fmt.Sprintf("action: %+v", m.Action))
+	}
+	return strings.Join(str, " - ")
 }
 
 type Object struct {
@@ -147,19 +173,6 @@ type Tag struct {
 
 type IsAssociation uint64
 
-const (
-	AssociationIsA IsAssociation = iota
-	AssociationEquals
-	AssociationTranslation
-	AssociationAbbreviation
-)
-
-type TagAssociation struct {
-	ID          uint64
-	Association uint64
-	Tags        Tags `gorm:"many2many:TagIsA;"`
-}
-
 func NewTag(key, value string) Tag {
 	return Tag{
 		Key:   key,
@@ -193,60 +206,17 @@ func (t Tag) String() string {
 	}
 	//return fmt.Sprintf("<<%x:[%t]%s=%s-%s/%s>>", t.GID[0:4], t.Ephemeral,
 	return fmt.Sprintf("<<%x:[%t]%s=%s-%s/%s>>", t.GID, t.Ephemeral,
-		t.Key, t.Value, objs, tags)
+		t.Key, toString(t.Value), objs, tags)
 }
 
 // AddAssociation adds one or more tags with a given association.
-func (t *Tag) AddAssociation(tags []Tag, asso IsAssociation) TagAssociation {
+func (t *Tag) AddAssociation(tags Tags, asso IsAssociation) TagAssociation {
 	tia := TagAssociation{
 		Association: uint64(asso),
 		Tags:        tags,
 	}
 	t.TagA = append(t.TagA, tia)
 	return tia
-}
-
-type KeyValue struct {
-	Key   string
-	Value string
-}
-
-type Action struct {
-	Command   string
-	Arguments map[string]string
-	// TTL indicates how many hops this action should take. TTL == 0
-	// means only local propagation.
-	TTL int
-	GID ActionID
-}
-
-func NewAction(cmd string, kvs ...KeyValue) Action {
-	args := map[string]string{}
-	for _, kv := range kvs {
-		args[kv.Key] = kv.Value
-	}
-	return Action{
-		Command:   cmd,
-		Arguments: args,
-		GID:       NewActionID(),
-	}
-}
-
-func (a *Action) Hash() []byte {
-	hash := sha256.New()
-	hash.Write([]byte(a.Command))
-	binary.Write(hash, binary.BigEndian, a.TTL)
-	hash.Write(a.GID)
-	var args []string
-	for arg := range a.Arguments {
-		args = append(args, arg)
-	}
-	sort.Strings(args)
-	for arg, value := range args {
-		binary.Write(hash, binary.BigEndian, arg)
-		hash.Write([]byte(value))
-	}
-	return hash.Sum(nil)
 }
 
 type Tags []Tag
@@ -265,50 +235,134 @@ func (t Tags) Add(tag Tag) Tags {
 	return append(t, tag)
 }
 
-type Message struct {
-	Objects   []Object
-	Tags      Tags
-	Action    Action
-	ID        MessageID
-	Signature []byte
+const (
+	AssociationIsA IsAssociation = iota
+	AssociationEquals
+	AssociationTranslation
+	AssociationAbbreviation
+)
+
+type TagAssociation struct {
+	ID          uint64
+	Association uint64
+	Tags        Tags `gorm:"many2many:TagIsA;"`
 }
 
-func (m *Message) Hash() []byte {
+type Action struct {
+	Command   string
+	Arguments KeyValues
+	// TTL indicates how many hops this action should take. TTL == 0
+	// means only local propagation.
+	TTL int
+}
+
+func NewAction(cmd string, kvs ...KeyValue) Action {
+	args := KeyValues{}
+	for _, kv := range kvs {
+		args[kv.Key] = kv.Value
+	}
+	return Action{
+		Command:   cmd,
+		Arguments: args,
+	}
+}
+
+func (a *Action) Hash() []byte {
 	hash := sha256.New()
-	for _, o := range m.Objects {
-		hash.Write(o.Hash())
+	hash.Write([]byte(a.Command))
+	binary.Write(hash, binary.BigEndian, a.TTL)
+	var args []string
+	for arg := range a.Arguments {
+		args = append(args, arg)
 	}
-	for _, t := range m.Tags {
-		hash.Write(t.Hash())
+	sort.Strings(args)
+	for arg, value := range args {
+		binary.Write(hash, binary.BigEndian, arg)
+		hash.Write([]byte(value))
 	}
-	hash.Write(m.Action.Hash())
-	hash.Write(m.ID)
 	return hash.Sum(nil)
 }
 
-func (m *Message) String() string {
-	str := []string{fmt.Sprintf("%x", m.ID[0:4])}
-	var objs []string
-	for _, o := range m.Objects {
-		objs = append(objs, fmt.Sprintf("ID: %x - ModuleID: %x",
-			o.GID[0:4], o.ModuleID[0:4]))
-	}
-	if len(objs) > 0 {
-		str = append(str, fmt.Sprintf("objects: [%s]", strings.Join(objs, ",")))
-	}
-	var tags []string
-	for _, t := range m.Tags {
-		tags = append(tags, fmt.Sprintf("{'%s':%s}", t.Key, t.Value))
-	}
-	if len(tags) > 0 {
-		str = append(str, fmt.Sprintf("tags: [%s]", strings.Join(tags, ",")))
-	}
-	if m.Action.Command != "" {
-		str = append(str, fmt.Sprintf("action: %+v", m.Action))
-	}
-	return strings.Join(str, " - ")
+func (a *Action) String() string {
+	return fmt.Sprintf("[%s:%+q]", a.Command, a.Arguments)
 }
 
-type Module interface {
-	ProcessMessage(m *Message) ([]Message, error)
+type Status struct {
+	Entries KeyValues
+}
+
+func NewStatus(kv ...KeyValue) Status {
+	s := Status{
+		Entries: KeyValues{},
+	}
+	for _, e := range kv {
+		s.Entries[e.Key] = e.Value
+	}
+	return s
+}
+
+func SubDomain(dom ...string) string {
+	return strings.Join(append(dom, BaseDomain), ".")
+}
+
+func ResetConfigPath() {
+	// Create a somewhat reasonable default-config-path
+	switch runtime.GOOS {
+	case "darwin":
+		ConfigPath = "Library/CyberMind"
+	case "linux":
+		ConfigPath = ".config/cybermind"
+	default:
+		ConfigPath = "CyberMind"
+		log.Warn("sorry - this platform is not yet supported - please contact ineiti@gasser.blue")
+	}
+
+	d, err := homedir.Dir()
+	log.ErrFatal(err)
+	ConfigPath = filepath.Join(d, ConfigPath)
+}
+
+func TempConfigPath() (err error) {
+	ConfigPath, err = ioutil.TempDir("", "CyberMind")
+	return err
+}
+
+func GetTemp(name string) string {
+	f, err := ioutil.TempFile("", name)
+	log.ErrFatal(err)
+	f.Close()
+	os.Remove(f.Name())
+	return f.Name()
+}
+
+type KeyValue struct {
+	Key   string
+	Value string
+}
+
+func NewKeyValue(key, value string) KeyValue {
+	return KeyValue{Key: key, Value: value}
+}
+
+func (kv KeyValue) String() string {
+	return fmt.Sprintf("%s=%s", kv.Key, toString(kv.Value))
+}
+
+type KeyValues map[string]string
+
+func (kvs KeyValues) String() string {
+	var ret []string
+	for k, v := range kvs {
+		ret = append(ret, fmt.Sprintf("%s=%s", k, toString(v)))
+	}
+	return strings.Join(ret, ",")
+}
+
+func toString(s string) string {
+	for _, c := range s {
+		if !unicode.IsPrint(c) {
+			return fmt.Sprintf("%x", []byte(s))
+		}
+	}
+	return s
 }

@@ -10,11 +10,12 @@ Tags are added automatically (for date, place, source), semi-automatically
 
 Roadmap 2017:
 - January-June: write down ideas
-- July: start backend
+- July: 
+    - start backend
+    - add email plugin
 - implement simple web-client
 - make usable Android / iOs client
 - make desktop-app for Windows/Mac/Linux
-- add email plugin
 - add bookmark/www plugin
 
 # Architecture
@@ -34,7 +35,18 @@ They must have some of the following:
 
 ## Backend
 
-Database storage for all sources. Some ideas:
+Database storage for all sources. For the moment I use
+Gorm and an sqlite-database. A big question is how
+to handle data that is already stored (like emails,
+files on the filesystem), but so that it can be accessed
+by a backup-system. For the moment each object has an
+`IgnoreData` field to avoid the data be stored in the
+db, but still available to the rest of the system.
+
+A later version could have an `io.Reader` that returns
+the data from the corresponding module.
+
+### Past ideas
 
 - make it directories/files for easy synchronisation across clouds
 - every device syncs its files between locally and the cloud

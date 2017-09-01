@@ -1,7 +1,7 @@
         test new email after startup
         test saving of emails w/o data
-
-        start using module-ids -> when re-spawning modules, pass stored module-id
+x       start using module-ids -> when re-spawning modules, pass stored module-id
+- 170718
 x       something still not working with config/storage and re-spawning of email
     test startup of email-module
 x   found nice library for imap-simulation

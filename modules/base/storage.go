@@ -15,10 +15,11 @@ import (
 	"gopkg.in/dedis/onet.v1/log"
 )
 
-var StorageSearchTag = broker.SubDomain("search_tag", "storage")
-var StorageSearchObject = broker.SubDomain("search_obj", "storage")
+const ModuleStorage = "storage"
 
-var ModuleStorage = "storage"
+var storageActionSearchTag = broker.SubDomain("search_tag", ModuleStorage)
+var storageActionSearchObject = broker.SubDomain("search_obj", ModuleStorage)
+var StorageActionSearchResult = broker.SubDomain("search_result", ModuleStorage)
 
 const StorageDB = "cybermind.db"
 
@@ -32,11 +33,11 @@ func RegisterStorage(b *broker.Broker) error {
 	if err != nil {
 		return err
 	}
-	_, err = b.SpawnModule(ModuleStorage, nil)
+	_, err = b.SpawnModule(ModuleStorage, nil, nil)
 	return err
 }
 
-func NewStorage(b *broker.Broker, msg *broker.Message) broker.Module {
+func NewStorage(b *broker.Broker, id broker.ModuleID, msg *broker.Message) broker.Module {
 	s := &Storage{
 		Broker: b,
 	}
@@ -64,7 +65,7 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 			log.Error(err)
 		}
 		return nil, nil
-	case StorageSearchTag:
+	case storageActionSearchTag:
 		log.Lvl3("Searching", m.Action.Arguments)
 		find := createFind(m.Action.Arguments)
 		var tags []broker.Tag
@@ -87,9 +88,12 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		}
 		log.Lvl3("Found Tags:", tags)
 		return []broker.Message{{
+			ID:   broker.NewMessageID(),
 			Tags: tags,
+			Action: broker.NewAction(StorageActionSearchResult,
+				broker.NewKeyValue("search_id", string(m.ID))),
 		}}, nil
-	case StorageSearchObject:
+	case storageActionSearchObject:
 		find := createFind(m.Action.Arguments)
 		var objs []broker.Object
 		err := s.DataBase.Where(find).Find(&objs).Error
@@ -102,12 +106,13 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		}
 		if len(objs) == 0 {
 			log.Lvlf3("Didn't find any objects for %#v", find)
-			return nil, nil
 		}
 		log.Lvl3("Found Objs:", objs)
 		return []broker.Message{{
 			ID:      broker.NewMessageID(),
 			Objects: objs,
+			Action: broker.NewAction(StorageActionSearchResult,
+				broker.NewKeyValue("search_id", string(m.ID))),
 		}}, nil
 	default:
 	}
@@ -145,6 +150,28 @@ func (s *Storage) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		//printObjects(s)
 	}
 	return nil, nil
+}
+
+func StorageSearch(cmd string, kvs ...broker.KeyValue) broker.Message {
+	msg := broker.Message{
+		ID: broker.NewMessageID(),
+		Action: broker.Action{
+			Command:   cmd,
+			Arguments: map[string]string{},
+		},
+	}
+	for _, kv := range kvs {
+		msg.Action.Arguments[kv.Key] = kv.Value
+	}
+	return msg
+}
+
+func StorageSearchObject(kvs ...broker.KeyValue) broker.Message {
+	return StorageSearch(storageActionSearchObject, kvs...)
+}
+
+func StorageSearchTag(kvs ...broker.KeyValue) broker.Message {
+	return StorageSearch(storageActionSearchTag, kvs...)
 }
 
 func printTags(s *Storage) {
