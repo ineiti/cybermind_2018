@@ -18,10 +18,10 @@ import (
 
 	"unicode"
 
-	"github.com/dedis/crypto/random"
 	"github.com/jinzhu/gorm"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/dedis/onet.v1/log"
+	"gopkg.in/dedis/crypto.v0/random"
 )
 
 const BaseDomain = "cybermind.gasser.blue"

@@ -94,7 +94,9 @@ func (e *Email) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 			e.GetNew()
 		}
 	} else if m.Action.Command == broker.BrokerStop {
-		e.client.Close()
+		if e.client != nil {
+			e.client.Close()
+		}
 	}
 	return nil, nil
 }

@@ -28,6 +28,8 @@ func TestEmail_Start(t *testing.T) {
 
 func TestEmail_Restart(t *testing.T) {
 	te := newTestEmail(true, 1)
+	log.ErrFatal(base.SpawnModule(te.Broker, ModuleEmail,
+		"Plain://username:password@localhost"))
 	log.Lvl2(te.Broker.ModuleEntries)
 	id := te.Broker.ModuleEntries[len(te.Broker.ModuleEntries)-1].Module.(*Email).moduleid
 	te.Broker.Stop()
@@ -85,16 +87,19 @@ func (te *testEmail) Close() {
 	if te.IMAP != nil {
 		log.Print("closing imap")
 		// Connect to server
-		c, err := client.Dial("localhost:1143")
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Lvl1("Connected")
-		c.Close()
-		te.IMAP.ForEachConn(func(c server.Conn) {
-			log.Print("Closing", c)
+		if false {
+			c, err := client.Dial("localhost:1143")
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Lvl1("Connected")
 			c.Close()
-		})
+			te.IMAP.ForEachConn(func(c server.Conn) {
+				log.Print("Closing", c)
+				c.Close()
+			})
+		}
+		log.Print("REALLY closing")
 		te.IMAP.Close()
 	}
 	te.Broker.Stop()
