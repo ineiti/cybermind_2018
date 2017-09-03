@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/emersion/go-imap/client"
 	"github.com/emersion/go-imap/server"
 	"github.com/ineiti/cybermind/broker"
 	"github.com/ineiti/cybermind/modules/base"
@@ -18,26 +17,29 @@ import (
 func TestEmail_Start(t *testing.T) {
 	te := newTestEmail(true, 0)
 	te.Broker.Start()
-	defer te.Broker.Stop()
+	defer te.Close()
 	log.ErrFatal(base.SpawnModule(te.Broker, ModuleEmail,
-		"Plain://username:password@localhost"))
+		"Plain://username:password@localhost:1143"))
 
 	require.Equal(t, 4, len(te.Broker.ModuleEntries))
 	log.Lvl2(te.Logger.Messages)
 }
 
 func TestEmail_Restart(t *testing.T) {
-	te := newTestEmail(true, 1)
-	log.ErrFatal(base.SpawnModule(te.Broker, ModuleEmail,
-		"Plain://username:password@localhost"))
-	log.Lvl2(te.Broker.ModuleEntries)
-	id := te.Broker.ModuleEntries[len(te.Broker.ModuleEntries)-1].Module.(*Email).moduleid
-	te.Broker.Stop()
+	var id broker.ModuleID
+	func() {
+		te := newTestEmail(true, 1)
+		defer te.Close()
+		log.ErrFatal(base.SpawnModule(te.Broker, ModuleEmail,
+			"Plain://username:password@localhost:1143"))
+		log.Lvl2(te.Broker.ModuleEntries)
+		id = te.Broker.ModuleEntries[len(te.Broker.ModuleEntries)-1].Module.(*Email).moduleid
+		log.Lvl2(te.Logger.Messages)
+	}()
 
-	log.Lvl2(te.Logger.Messages)
-	te = newTestEmail(false, 0)
-	te.Broker.Start()
-	defer te.Broker.Stop()
+	te := newTestEmail(false, 1)
+	defer te.Close()
+
 	log.Lvlf2("%+v", te.Broker.ModuleEntries)
 	log.Lvl2(te.Logger.Messages)
 	require.Equal(t, 4, len(te.Broker.ModuleEntries))
@@ -69,13 +71,13 @@ func newTestEmail(reset bool, cmd int) *testEmail {
 	log.ErrFatal(base.RegisterConfig(te.Broker))
 	log.ErrFatal(test.RegisterTestInput(te.Broker))
 	log.ErrFatal(RegisterEmail(te.Broker))
+	te.IMAP = startIMAPServer()
 
 	for i := 1; i <= cmd; i++ {
 		switch i {
 		case 1:
 			te.Broker.Start()
 		case 2:
-			te.IMAP = startIMAPServer()
 			log.ErrFatal(base.SpawnModule(te.Broker, ModuleEmail,
 				"Plain://username:password@localhost:1143"))
 		}
@@ -84,23 +86,6 @@ func newTestEmail(reset bool, cmd int) *testEmail {
 }
 
 func (te *testEmail) Close() {
-	if te.IMAP != nil {
-		log.Print("closing imap")
-		// Connect to server
-		if false {
-			c, err := client.Dial("localhost:1143")
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Lvl1("Connected")
-			c.Close()
-			te.IMAP.ForEachConn(func(c server.Conn) {
-				log.Print("Closing", c)
-				c.Close()
-			})
-		}
-		log.Print("REALLY closing")
-		te.IMAP.Close()
-	}
+	te.IMAP.Close()
 	te.Broker.Stop()
 }

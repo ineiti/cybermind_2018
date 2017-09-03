@@ -89,7 +89,7 @@ func (e *Email) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 		return search, nil
 	} else if m.Action.Command == base.StorageActionSearchResult {
 		if m.Action.Arguments["search_id"] == string(e.searchid) {
-			log.LLvl2("Got a search result:", m.Objects)
+			log.Lvl2("Got a search result:", m.Objects)
 			e.AddMails(m.Objects)
 			e.GetNew()
 		}

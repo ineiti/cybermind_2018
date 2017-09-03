@@ -76,7 +76,7 @@ func (c *CLI) ProcessMessage(m *broker.Message) ([]broker.Message, error) {
 
 func (c *CLI) Listen() {
 	defer func() {
-		log.LLvl3("Finishing listen")
+		log.Lvl3("Finishing listen")
 		c.closed <- true
 	}()
 	for {
@@ -103,10 +103,10 @@ func (c *CLI) Listen() {
 		args = strings.SplitN(args[1], ":", 2)
 		args = append(args, "")
 		cmd, arg := args[0], args[1]
-		log.LLvlf3("%s sent cmd: %s with args: %s", client, cmd, arg)
+		log.Lvlf3("%s sent cmd: %s with args: %s", client, cmd, arg)
 		switch cmd {
 		case "list":
-			log.LLvl3("Listing")
+			log.Lvl3("Listing")
 			var names []string
 			for m := range c.broker.ModuleTypes {
 				names = append(names, m)
@@ -117,7 +117,7 @@ func (c *CLI) Listen() {
 				log.Error(err)
 			}
 		case "close":
-			log.LLvl3("Closing")
+			log.Lvl3("Closing")
 			return
 		default:
 			log.Warn("Didn't recognize command", cmd, arg)

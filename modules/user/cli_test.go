@@ -15,7 +15,7 @@ func TestRegisterCLI(t *testing.T) {
 }
 
 func TestNewCLI(t *testing.T) {
-	log.LLvl2("Launching broker")
+	log.Lvl2("Launching broker")
 	b := broker.NewBroker()
 	log.Lvl2("Creating CLI")
 	mod := NewCLI(b, nil).(*CLI)

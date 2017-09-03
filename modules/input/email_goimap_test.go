@@ -123,7 +123,7 @@ Hi there :)`
 	go func() {
 		if err := s.ListenAndServe(); err != nil {
 			if strings.Contains(err.Error(), "use of closed") {
-				log.LLvl2("Quitting server")
+				log.Lvl2("Quitting server")
 				return
 			}
 			log.Fatal(err)
