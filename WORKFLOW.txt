@@ -1,5 +1,7 @@
-        test new email after startup
         test saving of emails w/o data
+            converting emails to/from []bytes
+        test new email after startup
+- 170904
 x       start using module-ids -> when re-spawning modules, pass stored module-id
 - 170718
 x       something still not working with config/storage and re-spawning of email

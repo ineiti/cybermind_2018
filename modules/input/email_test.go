@@ -48,8 +48,12 @@ func TestEmail_Restart(t *testing.T) {
 
 func TestEmail_GetNew(t *testing.T) {
 	te := newTestEmail(true, 2)
+
 	defer te.Close()
-	log.Lvl1(te.Logger)
+	//log.Lvl1(te.Logger)
+	addSpam(te.IMAP, "3rd msg", "this is a new message")
+	broker.NewMessage().AddAction(InputActionPoll).Broadcast(te.Broker)
+	//log.Lvl1(te.Logger)
 }
 
 type testEmail struct {

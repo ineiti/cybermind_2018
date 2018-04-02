@@ -9,10 +9,15 @@ import (
 
 	"strings"
 
+	"fmt"
+
+	"math/rand"
+
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/backend/memory"
 	"github.com/emersion/go-imap/client"
 	"github.com/emersion/go-imap/server"
+	"github.com/ineiti/go-imap/backend"
 	"gopkg.in/dedis/onet.v1/log"
 )
 
@@ -91,26 +96,6 @@ func startIMAPServer() *server.Server {
 	log.Lvl3("Starting server")
 	// Create a memory backend
 	be := memory.New()
-	user, err := be.Login("username", "password")
-	if err != nil {
-		log.Fatal(err)
-	}
-	mb, err := user.GetMailbox("INBOX")
-	if err != nil {
-		log.Fatal(err)
-	}
-	msg := `From: contact@example.org
-To: contact@example.org
-Subject: 2nd message
-Date: Wed, 11 May 2017 14:31:59 +0000
-Message-ID: <0000001@localhost/>
-Content-Type: text/plain
-
-Hi there :)`
-	err = mb.CreateMessage([]string{"\\Seen"}, time.Now(), imap.Literal(bytes.NewBufferString(msg)))
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	// Create a new server
 	s := server.New(be)
@@ -130,5 +115,37 @@ Hi there :)`
 		}
 		log.Print()
 	}()
+
+	addSpam(s, "2nd message", "Hi there :)")
 	return s
+}
+
+func addSpam(s *server.Server, subject, body string) {
+	id := fmt.Sprintf("%09d@localhost", rand.Int31())
+	addMsg(s, "contact@example.org", "contact@example.org", subject,
+		"Wed, 11 May 2017 14:31:59 +0000", id, "text/plain",
+		body)
+}
+
+func addMsg(s *server.Server, from, to, subject, date, id, ct, body string) {
+	mb := getInbox(s)
+	msg := fmt.Sprintf("From: %s\nTo: %s\nSubject: %s\nDate: %s\n"+
+		"Message-ID: <%s/>\nContent-Type: %s\n\n%s",
+		from, to, subject, date, id, ct, body)
+	err := mb.CreateMessage([]string{"\\Seen"}, time.Now(), imap.Literal(bytes.NewBufferString(msg)))
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func getInbox(s *server.Server) backend.Mailbox {
+	user, err := s.Backend.Login("username", "password")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mb, err := user.GetMailbox("INBOX")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return mb
 }

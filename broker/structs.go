@@ -20,8 +20,8 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/mitchellh/go-homedir"
-	"gopkg.in/dedis/onet.v1/log"
 	"gopkg.in/dedis/crypto.v0/random"
+	"gopkg.in/dedis/onet.v1/log"
 )
 
 const BaseDomain = "cybermind.gasser.blue"
@@ -71,14 +71,19 @@ type Message struct {
 	Signature []byte
 }
 
-func NewMessage(objs *[]Object, tags *Tags, action *Action, status *Status) Message {
-	return Message{
-		ID:      NewMessageID(),
-		Objects: *objs,
-		Tags:    *tags,
-		Action:  *action,
-		Status:  *status,
+func NewMessage() *Message {
+	return &Message{
+		ID: NewMessageID(),
 	}
+}
+
+func (m *Message) AddAction(cmd string, kvs ...KeyValue) *Message {
+	m.Action = NewAction(cmd, kvs...)
+	return m
+}
+
+func (m *Message) Broadcast(b *Broker) error {
+	return b.BroadcastMessage(m)
 }
 
 func (m *Message) Hash() []byte {
